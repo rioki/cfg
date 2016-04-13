@@ -153,6 +153,6 @@ namespace cfg
         }
 
         Parser parser(*this);
-        parser.parse(in);
+        parser.parse(in, file);
     }
 }
