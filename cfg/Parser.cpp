@@ -150,7 +150,7 @@ namespace cfg
         int c = in->get();
         while (true)
         {
-            // NOTE: not validating the actial format
+            // NOTE: not validating the actual format
             switch (c)
             {
             case '0': case '1': case '2': case '3': case '4':
@@ -207,6 +207,7 @@ namespace cfg
                     return STRING;
                 case '\n': case '\r': case EOF:
                     error("Unexpected newline in string.");
+                    return ERROR;
                 case '\\':
                     c = in->get();
                     switch (c)
