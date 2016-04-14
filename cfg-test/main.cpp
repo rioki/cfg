@@ -3,5 +3,5 @@
 
 int main(int argc, char* ergv[])
 {
-	return rtest::run();
+    return rtest::run();
 }
