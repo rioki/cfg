@@ -42,6 +42,22 @@ namespace cfg
         throw std::logic_error("Value " + section + ":" + name + " does not exist.");
     }
 
+    std::string Config::get_value(const std::string & section, const std::string & name, const std::string & fallback)
+    {
+        auto si = values.find(section);
+        if (si != values.end())
+        {
+            auto vi = si->second.find(name);
+            if (vi != si->second.end())
+            {
+                return vi->second;
+            }
+        }
+
+        values[section][name] = fallback;
+        return fallback;
+    }
+
     bool isalnum(const std::string& name)
     {
         for (char c : name)
@@ -128,7 +144,7 @@ namespace cfg
     {
         std::ofstream out(file);
 
-        if (out.bad())
+        if (!out.is_open())
         {
             throw std::runtime_error("Failed to open " + file + " for writing.");
         }
