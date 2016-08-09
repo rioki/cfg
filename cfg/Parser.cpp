@@ -3,6 +3,7 @@
 #include "Config.h"
 
 #include <stdexcept>
+#include <sstream>
 
 namespace cfg
 {
@@ -11,9 +12,11 @@ namespace cfg
 
     Parser::~Parser() {}
         
-    void Parser::parse(std::istream& i)
+    void Parser::parse(std::istream& i, const std::string& f, unsigned int l)
     {
-        in = &i;
+        in   = &i;
+        file = f;
+        line = l;
 
         // prep the look ahead
         std::string dummy;
@@ -21,7 +24,16 @@ namespace cfg
 
         while (next_token != FILE_END)
         {
-            parse_section();
+            if (next_token == NEWLINE)
+            {
+                // skip empty lines
+                get_next_token(dummy);
+            }
+            else
+            {
+                parse_section();
+            }
+            
         }
     }
 
@@ -31,7 +43,7 @@ namespace cfg
         value = next_value;
 
         next_token = lex_token(next_value);
-        while (next_token == WHITESPACE)
+        while (next_token == WHITESPACE || next_token == COMMENT)
         {
             next_token = lex_token(next_value);
         }
@@ -41,17 +53,21 @@ namespace cfg
             
     Parser::Token Parser::lex_token(std::string& value)
     {
+        value.clear();
         int c = in->get();
         switch (c)
         {               
             case ' ': case '\t': case '\v':
                 value.push_back(c);
                 return lex_whitespace(value);
-            case '\n': case '\r':
+            case '\n': case '\r':				
                 value.push_back(c);
                 return lex_newline(value);
             case '0': case '1': case '2': case '3': case '4': 
             case '5': case '6': case '7': case '8': case '9':
+            case '-': case '+':
+                value.push_back(c);
+                return lex_number(value);
             case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
             case 'g': case 'h': case 'i': case 'j': case 'k': case 'l': 
             case 'm': case 'n': case 'o': case 'p': case 'q': case 'r':
@@ -62,7 +78,7 @@ namespace cfg
             case 'M': case 'N': case 'O': case 'P': case 'Q': case 'R':
             case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
             case 'Y': case 'Z':
-            case '_': case '-':
+            case '_':
                 value.push_back(c);
                 return lex_identifier(value);
             case '"':
@@ -76,11 +92,14 @@ namespace cfg
             case '=':
                 value = "=";
                 return EQUALS;
+            case '#':
+                return lex_comment(value);
             case EOF:
                 return FILE_END;
             default:
                 value.push_back(c);
-                throw std::runtime_error("Unexpected " + value + ".");
+                error("Unexpected " + value + ".");
+                return ERROR;
         }
     }
 
@@ -105,6 +124,7 @@ namespace cfg
     Parser::Token Parser::lex_newline(std::string& value)
     {
         int c = in->get();
+        line++;
         switch (c)
         {
             case '\n': case '\r':
@@ -122,6 +142,27 @@ namespace cfg
             default:
                 in->unget();
                 return NEWLINE;
+        }
+    }
+
+    Parser::Token Parser::lex_number(std::string& value)
+    {
+        int c = in->get();
+        while (true)
+        {
+            // NOTE: not validating the actual format
+            switch (c)
+            {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':	
+            case '.':
+                value.push_back(c);
+                break;
+            default:
+                in->unget();
+                return NUMBER;
+            }
+            c = in->get();
         }
     }
 
@@ -164,8 +205,9 @@ namespace cfg
             {
                 case '"': 
                     return STRING;
-                case '\n': case '\r':
-                    throw std::runtime_error("Unexpected newline in string.");
+                case '\n': case '\r': case EOF:
+                    error("Unexpected newline in string.");
+                    return ERROR;
                 case '\\':
                     c = in->get();
                     switch (c)
@@ -201,7 +243,7 @@ namespace cfg
                             value.push_back('\v');
                             break;
                         default:
-                            throw std::runtime_error("Unknown escape sequence.");
+                            error("Unknown escape sequence.");
                             break;
                     }
                     break;
@@ -213,11 +255,28 @@ namespace cfg
         }
     }
 
+    Parser::Token Parser::lex_comment(std::string& value)
+    {
+        int c = in->get();
+        while (true)
+        {
+            switch (c)
+            {			
+            case '\n': case '\r': case EOF:
+                return COMMENT;			
+            default:
+                value.push_back(c);
+                break;
+            }
+            c = in->get();
+        }
+    }
+
     void Parser::parse_section() 
     {
         parse_section_header();
 
-        while (next_token == IDENTIFIER) 
+        while (next_token == IDENTIFIER || next_token == NEWLINE)
         {
             parse_value_pair();
         }
@@ -230,26 +289,26 @@ namespace cfg
 
         if (t != OPEN_BRACE) 
         {
-            throw std::runtime_error("Expected open breace.");
+            error("Expected open breace.");
         }
 
         t = get_next_token(value);
         if (t != IDENTIFIER)
         {
-            throw std::runtime_error("Expected identifier.");
+            error("Expected identifier.");
         }
         section = value;
 
         t = get_next_token(value);
         if (t != CLOSE_BRACE)
         {
-            throw std::runtime_error("Expected close brace.");
+            error("Expected close brace.");
         }
 
         t = get_next_token(value);
         if (t != NEWLINE && t != FILE_END)
         {
-            throw std::runtime_error("Expected newline.");
+            error("Expected newline.");
         }
 
     }
@@ -267,19 +326,20 @@ namespace cfg
 
         if (t != IDENTIFIER) 
         {
-            throw std::runtime_error("Expected identifier.");
+            error("Expected identifier.");
         }
         std::string name = value;
 
         t = get_next_token(value);
         if (t != EQUALS)
         {
-            throw std::runtime_error("Expected equals.");
+            error("Expected equals.");
         }
 
-        if (t != IDENTIFIER && t != STRING) 
+        t = get_next_token(value);
+        if (t != IDENTIFIER && t != STRING && t != NUMBER)
         {
-            throw std::runtime_error("Expected identifier or string.");
+            error("Expected identifier or string.");
         }
         
         config.set_value(section, name, value);
@@ -287,7 +347,19 @@ namespace cfg
         t = get_next_token(value);
         if (t != NEWLINE && t != FILE_END)
         {
-            throw std::runtime_error("Expected newline.");
+            error("Expected newline.");
         }
+    }
+
+    void Parser::error(const std::string& msg)
+    {
+        std::stringstream buff;
+        if (!file.empty())
+        {
+            buff << file;
+        }
+        buff << "(" << line << "): " << msg;
+
+        throw std::runtime_error(buff.str());
     }
 }
