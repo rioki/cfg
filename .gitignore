@@ -1,9 +1,6 @@
-/Win32
+/x86
 /x64
-/*/Win32
+/*/x86
 /*/x64
 /.vs
-*.user
-*.db
-*.opendb
-*.sdf
+*.suo
