@@ -42,7 +42,7 @@ namespace cfg
         throw std::logic_error("Value " + section + ":" + name + " does not exist.");
     }
 
-    std::string Config::get_value(const std::string & section, const std::string & name, const std::string & fallback)
+    std::string Config::get_value(const std::string& section, const std::string& name, const std::string& fallback)
     {
         auto si = values.find(section);
         if (si != values.end())

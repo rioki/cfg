@@ -83,7 +83,7 @@ namespace cfg
     {
         std::stringstream buff;
         buff << value;
-        set_value(section, name, value);
+        set_value(section, name, buff.str());
     }
 }
 
