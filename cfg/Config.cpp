@@ -85,7 +85,7 @@ namespace cfg
     {
         for (char c : name)
         {
-            if (std::isalnum(c) == false)
+            if (std::isalnum(c) == false && c != '_' && c != '-')
             {
                 return false;
             }
